@@ -2,6 +2,9 @@ import os
 import requests
 from datetime import datetime, timezone
 from google.cloud import bigquery
+from flask import Flask, request
+
+app = Flask(__name__)
 
 ACCESS_TOKEN = os.environ["EVENTBRITE_TOKEN"]
 PROJECT_ID   = os.environ["GCP_PROJECT"]
@@ -13,6 +16,7 @@ BASE_URL = "https://www.eventbriteapi.com/v3"
 HEADERS = {"Authorization": f"Bearer {ACCESS_TOKEN}"}
 
 START_DATE = "2026-02-01T00:00:00Z"
+
 
 def get_events():
     url = f"{BASE_URL}/users/me/events/"
@@ -54,7 +58,8 @@ def load_to_bigquery(table, rows):
     job.result()
 
 
-def main(request):
+@app.route("/", methods=["GET", "POST"])
+def run_job():
     now = datetime.now(timezone.utc)
     events = get_events()
 
@@ -72,7 +77,6 @@ def main(request):
         })
 
         start = datetime.fromisoformat(e["start"]["utc"].replace("Z","+00:00"))
-        end = datetime.fromisoformat(e["end"]["utc"].replace("Z","+00:00"))
 
         attendees = get_attendees(e["id"])
 
@@ -91,4 +95,9 @@ def main(request):
     load_to_bigquery("events", event_rows)
     load_to_bigquery("attendees", attendee_rows)
 
-    return "Success"
+    return "Success", 200
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
